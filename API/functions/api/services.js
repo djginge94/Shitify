@@ -3,8 +3,8 @@ const Base64 = require('js-base64').Base64
 
 // AUTH
 const spotifyAuthUrl = 'https://accounts.spotify.com/api/token'
-const clientId = 'b5f5991988bd49a3b9e21ee41f4de0ae'
-const clientSecret = '8059eeec51cd4d1192636356bf1028f7'
+const clientId = ''
+const clientSecret = ''
 
 exports.fetchToken = () => new Promise((resolve, reject) => {
     const options = {
