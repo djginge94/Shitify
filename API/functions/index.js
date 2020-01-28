@@ -1,47 +1,67 @@
 const functions = require("firebase-functions")
-const express = require('express')
-const service = require('./api/services')
+const Alexa = require('alexa-sdk')
+const SKILL_ID = 'amzn1.ask.skill.42372c74-2938-40c7-a980-859bbbfa1b28'
+const SearchUseCase = require('./api/search_usecase')
 
-const app = express()
+const handlers = {
+    'LaunchRequest': function() {
+        this.emit(':ask', this.t('LAUNCH_RESPONSE'));
+    },
+    'Unhandled': function() {
+        this.emit(':tell', this.t('ERROR_MESSAGE'));
+    },
+    'SearchIntent':  function () {
+        const artist = this.event.request.intent.slots.artist.value;
 
-app.get('/:artist', (req, res) => {
-    return service.fetchToken()
-    .then((response) => {
-        return response
-    })
-    .then((token) => {
-        const artistId = service.searchForArtist(req.params.artist, token)
-        return Promise.all([artistId, token])
-    })
-    .then(([artistId, token]) => {
-        const albumIds = service.getAlbumIds(artistId, token)
-        return Promise.all([albumIds, token])
-    })
-    .then(([albumIds, token]) => {
-        const albumId = service.leastPopularAlbum(albumIds, token)
-        return Promise.all([albumId, token])
-    })
-    .then(([albumId, token]) => {
-        const trackIds = service.getTrackIds(albumId, token)
-        return Promise.all([trackIds, token])
-    })
-    .then(([trackIds, token]) => {
-        const leastPopularTrack = service.leastPopularTrack(trackIds, token)
-        return leastPopularTrack
-    })
-    .then((leastPopularTrack) => {
-        res.status(200).send(leastPopularTrack)
-    })
-    .catch((error) => {
-        console.log(`Error: ${error}`)
-    })
-    .finally(() => {
-        res.end()
-    })
-})
+        if (artist == "Coldplay") {
+            this.emit(':tell', this.t(`All Coldplay songs are shit, do you even need to ask!`));
+            return
+        }
 
-const leastPopular = functions.https.onRequest(app)
-
-module.exports = {
-    leastPopular
+        SearchUseCase.search(artist)
+        .then((name) => {
+            this.emit(':tell', this.t(`The least popular song by ${artist} is ${name}`));
+        })
+        .catch(() => {
+            this.emit(':tell', this.t(`ERROR_MESSAGE`));
+        })
+    },
+    'ErrorHandling': function() {
+        const statusCode = this.attributes['lastError']
+        switch(statusCode) {
+            case 500: 
+                this.emit(':tell', this.t('ERROR_MESSAGE'))
+                break
+            default:
+                this.emit(':tell', this.t('DEFAULT_ERROR'))
+                break
+        }
+    }
 }
+
+const languageStrings = {
+    'en-GB': {
+        translation: {
+            ERROR_MESSAGE: 'Oh balls!',
+            DEFAULT_ERROR: 'Default Error!',
+            LAUNCH_RESPONSE: 'Welcome to Shitify. How can I help?'
+        }
+    }
+}
+
+const app = (req, res) => {
+    const alexa = Alexa.handler(req.body, {
+        'fail': function(error) {
+            res.send(error);
+        },
+        'succeed': function(data) {
+            res.send(data);
+        }
+    })
+    alexa.resources = languageStrings
+    alexa.appId = SKILL_ID
+    alexa.registerHandlers(handlers)
+    alexa.execute()
+}
+
+exports.handler = functions.https.onRequest(app)
